@@ -30,6 +30,11 @@
   --ok-700: #15694a;
   --ok-100: #e6f5ef;
 
+  /* Chart series, checked as a pair for colour-blind separation. "On spot" is
+     below 3:1 against white, so the chart always has a legend and a table. */
+  --series-hedged: var(--accent-700);
+  --series-spot: #6da7ec;
+
   --s-1: 4px;
   --s-2: 8px;
   --s-3: 12px;

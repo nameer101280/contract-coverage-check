@@ -15,6 +15,8 @@ import { LineDraft, LineForm } from "./components/LineForm";
 import { ContextPanel } from "./components/ContextPanel";
 import { CoverageTimeline } from "./components/CoverageTimeline";
 import { ConflictNotice } from "./components/ConflictNotice";
+import { ConsumptionSplit } from "./components/ConsumptionSplit";
+import { monthlySplit, yearShares } from "./domain/split";
 
 const DRAFT_ID = "__draft__";
 
@@ -134,6 +136,16 @@ export function Workspace({ scenario }: Props) {
     [allLines],
   );
 
+  const months = useMemo(
+    () =>
+      monthlySplit(
+        allLines,
+        consumption.perDayKwh,
+        Number(analysisWindow.from.slice(0, 4)),
+      ),
+    [allLines, consumption.perDayKwh],
+  );
+
   const applyEnding = ({ lineId, lastDay }: Ending) => {
     const when = new Date(`${lastDay}T00:00:00Z`).toLocaleDateString("en-GB", {
       day: "numeric",
@@ -239,6 +251,20 @@ export function Workspace({ scenario }: Props) {
               onEnd={applyEnding}
             />
           </div>
+        </div>
+      </section>
+
+      <section className="card" style={{ marginTop: "var(--s-4)" }}>
+        <div className="card__head">
+          <h2 className="card__title">How consumption divides, 2026</h2>
+          <p className="card__hint">
+            Expected consumption each month at the metered rate, split between
+            what the hedges fix and what is left on spot. Hedged amounts are
+            spread evenly over their dates; seasonality is ignored.
+          </p>
+        </div>
+        <div className="card__body">
+          <ConsumptionSplit months={months} shares={yearShares(months)} />
         </div>
       </section>
     </>

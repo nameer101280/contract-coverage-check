@@ -2,6 +2,7 @@ import { Gap, daysInPeriod } from "../domain/coverage";
 import { PricedOverlap } from "../domain/cost";
 import { Ending, contractOf, suggestEnding } from "../domain/contracts";
 import { Contract, ContractLine } from "../domain/types";
+import { formatEur as eur, formatKwh as kwh } from "./format";
 
 /**
  * Conflict and gap warnings.
@@ -54,20 +55,6 @@ function priceOf(line: ContractLine): string {
     ).toFixed(2)}/MWh`;
   }
   return `+€${(line.constant ?? 0).toFixed(2)}/MWh`;
-}
-
-/** Whole euros once the amount is large enough that cents are noise. */
-function eur(n: number): string {
-  return `€${n.toLocaleString("en-GB", {
-    minimumFractionDigits: n < 100 ? 2 : 0,
-    maximumFractionDigits: n < 100 ? 2 : 0,
-  })}`;
-}
-
-function kwh(n: number): string {
-  return n >= 100_000
-    ? `${(n / 1000).toLocaleString("en-GB", { maximumFractionDigits: 0 })} MWh`
-    : `${n.toLocaleString("en-GB", { maximumFractionDigits: 0 })} kWh`;
 }
 
 interface Props {
@@ -135,15 +122,15 @@ export function ConflictNotice({
                 {hedgeOnly ? (
                   <>
                     This is normal — a hedge covers part of the volume and spot
-                    covers the rest. But nothing currently shows how the volume
-                    divides between{" "}
+                    covers the rest. The real asset view leaves the division
+                    between{" "}
                     {overlap.lines.map((l, idx) => (
                       <span key={l.id}>
                         {idx > 0 && " and "}
                         <code>{priceOf(l)}</code>
                       </span>
-                    ))}
-                    , so the split is left to the reader.
+                    ))}{" "}
+                    to the reader; it is drawn month by month below.
                   </>
                 ) : (
                   <>

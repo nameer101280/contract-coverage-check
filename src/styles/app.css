@@ -1,4 +1,5 @@
 @import "./tokens.css";
+@import "./split-chart.css";
 
 * {
   box-sizing: border-box;
