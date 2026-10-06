@@ -16,9 +16,9 @@ const PLOT_PX = 160;
 
 const SEGMENTS = [
   { key: "hedged", label: "Hedged", className: "split__seg--hedged" },
-  { key: "spot", label: "On spot", className: "split__seg--spot" },
+  { key: "spot", label: "Market price", className: "split__seg--spot" },
   { key: "unpriced", label: "No price", className: "split__seg--unpriced" },
-  { key: "excess", label: "Hedged beyond consumption", className: "split__seg--excess" },
+  { key: "excess", label: "Hedged but not used", className: "split__seg--excess" },
 ] as const;
 
 type SegmentKey = (typeof SEGMENTS)[number]["key"];
@@ -65,7 +65,7 @@ export function ConsumptionSplit({ months, shares }: Props) {
     <div className="split-chart">
       <p className="split-chart__summary">
         Across the year: <strong>{formatPercent(shares.hedged)} hedged</strong>,{" "}
-        <strong>{formatPercent(shares.spot)} on spot</strong>
+        <strong>{formatPercent(shares.spot)} at the market price</strong>
         {shares.unpriced > 0 && (
           <>
             , <strong>{formatPercent(shares.unpriced)} with no price</strong>

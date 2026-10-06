@@ -1,4 +1,4 @@
-import { Contract, ContractLine, Period } from "../domain/types";
+import { Contract, ContractLine, LineType, Period } from "../domain/types";
 import { daysInPeriod, periodBounds } from "../domain/coverage";
 import { contractOf } from "../domain/contracts";
 import { plainPrice } from "./format";
@@ -13,6 +13,12 @@ import { plainPrice } from "./format";
  * Drawn against a shared axis, an overlap is just visible. That is the whole
  * reason this is a timeline and not a table.
  */
+
+const TYPE_NAMES: Record<LineType, string> = {
+  spot: "market price",
+  hedge: "fixed-price hedge",
+  markup: "supplier margin",
+};
 
 const MONTHS = [
   "J",
@@ -54,7 +60,7 @@ export function CoverageTimeline({
   return (
     <div className="timeline">
       <div className="timeline__scale">
-        <span>Contract line</span>
+        <span></span>
         <div className="timeline__months">
           {MONTHS.map((m, i) => (
             <span key={i}>{m}</span>
@@ -70,13 +76,10 @@ export function CoverageTimeline({
         return (
           <div className="timeline__row" key={line.id}>
             <div className="timeline__label">
-              {line.name || "Untitled line"}
+              {isNew ? "New line" : (contract?.name ?? line.name)}
               <span className="timeline__label-sub">
-                {isNew
-                  ? "this new line"
-                  : (contract?.name ?? "—") +
-                    " · " +
-                    (line.direction === "consumption" ? "consumption" : "injection")}
+                {TYPE_NAMES[line.type]}
+                {line.direction === "injection" && " · fed into the grid"}
               </span>
             </div>
             <div className="timeline__track">
