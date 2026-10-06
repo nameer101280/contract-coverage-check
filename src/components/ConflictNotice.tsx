@@ -1,13 +1,13 @@
 import { Gap, daysInPeriod } from "../domain/coverage";
 import { PricedOverlap } from "../domain/cost";
 import { Ending, contractOf, suggestEnding } from "../domain/contracts";
-import { Contract, ContractLine } from "../domain/types";
-import { formatEur as eur, formatKwh as kwh } from "./format";
+import { Contract, ContractLine, EnergyDirection, Period } from "../domain/types";
+import { formatEur as eur, formatKwh as kwh, plainPrice } from "./format";
 
 /**
  * Conflict and gap warnings.
  *
- * Three decisions worth stating, because they are the product judgement rather
+ * Four decisions worth stating, because they are the product judgement rather
  * than the code:
  *
  * 1. These are warnings, not errors. Nothing is blocked. Some overlaps are
@@ -22,39 +22,48 @@ import { formatEur as eur, formatKwh as kwh } from "./format";
  * 3. A hedge overlapping a spot line is described differently from two spot
  *    lines overlapping, because they are different situations. The first is
  *    normal but unclear; the second is almost certainly wrong.
+ *
+ * 4. The wording is everyday language: "market price + €9", "charge for the
+ *    same electricity". A warning that needs the contract notation to be
+ *    understood only helps people who would not have made the mistake.
  */
 
-function describeDate(iso: string): string {
+function describeDate(iso: string, withYear = true): string {
   return new Date(`${iso}T00:00:00Z`).toLocaleDateString("en-GB", {
     day: "numeric",
     month: "short",
-    year: "numeric",
+    ...(withYear ? { year: "numeric" } : {}),
     timeZone: "UTC",
   });
 }
 
-function lineLabel(
+/** "1 Jul – 31 Dec 2026", with the year once when both ends share it. */
+function describeRange(period: Period): string {
+  const sameYear = period.from.slice(0, 4) === period.to.slice(0, 4);
+  return `${describeDate(period.from, !sameYear)} – ${describeDate(period.to)}`;
+}
+
+function contractName(
   line: ContractLine,
   draftId: string,
   contracts: Contract[],
 ): string {
   if (line.id === draftId) return "this new line";
-  const contract = contractOf(contracts, line.id);
-  return contract ? `${line.name} (${contract.name})` : line.name;
+  return contractOf(contracts, line.id)?.name ?? line.name;
 }
 
-function priceOf(line: ContractLine): string {
-  if (line.type === "spot") {
-    return `${line.scaling ?? 1} × spot + ${(line.constant ?? 0).toFixed(2)}`;
-  }
-  if (line.type === "hedge") {
-    return `${(line.hedgeVolume ?? 0).toLocaleString("en-GB", {
-      maximumFractionDigits: 1,
-    })} ${line.hedgeVolumeUnit ?? "kWh"} @ €${(
-      line.hedgePrice ?? 0
-    ).toFixed(2)}/MWh`;
-  }
-  return `+€${(line.constant ?? 0).toFixed(2)}/MWh`;
+function electricity(direction: EnergyDirection): string {
+  return direction === "consumption"
+    ? "the electricity you use"
+    : "the electricity you feed into the grid";
+}
+
+/** "A, B and C" */
+function listOf(items: React.ReactNode[]): React.ReactNode[] {
+  return items.flatMap((item, i) => [
+    i === 0 ? "" : i === items.length - 1 ? " and " : ", ",
+    item,
+  ]);
 }
 
 interface Props {
@@ -78,12 +87,10 @@ export function ConflictNotice({
       <div className="notice notice--ok">
         <span className="notice__icon">✓</span>
         <div>
-          <p className="notice__title">
-            No competing prices or uncovered periods
-          </p>
+          <p className="notice__title">Every day has exactly one price</p>
           <p className="notice__body">
-            Every day in this window has exactly one base price for
-            consumption.
+            No two contracts charge for the same electricity, and no day is
+            left without a price.
           </p>
         </div>
       </div>
@@ -94,74 +101,70 @@ export function ConflictNotice({
     <>
       {overlaps.map((overlap, i) => {
         const spotLines = overlap.lines.filter((l) => l.type === "spot");
-        const hedgeOnly =
-          spotLines.length < 2 && overlap.lines.some((l) => l.type === "hedge");
+        const hedgeLines = overlap.lines.filter((l) => l.type === "hedge");
+        const hedgeOnly = spotLines.length < 2 && hedgeLines.length > 0;
         const ending = hedgeOnly ? null : suggestEnding(overlap);
+        const name = (l: ContractLine) => contractName(l, draftId, contracts);
+
+        if (hedgeOnly) {
+          return (
+            <div key={`o-${i}`} className="notice notice--warn">
+              <span className="notice__icon">!</span>
+              <div>
+                <p className="notice__title">
+                  {describeRange(overlap.period)}: a hedge and a market-price
+                  line run together
+                </p>
+                <p className="notice__body">
+                  This is normal. The hedge fixes the price for part of{" "}
+                  {electricity(overlap.direction)} (
+                  {listOf(hedgeLines.map((l) => <strong key={l.id}>{plainPrice(l)}</strong>))}
+                  ), and the market-price line covers the rest (
+                  {listOf(spotLines.map((l) => <strong key={l.id}>{plainPrice(l)}</strong>))}
+                  ). The chart below shows how it divides each month.
+                </p>
+              </div>
+            </div>
+          );
+        }
 
         return (
-          <div
-            key={`o-${i}`}
-            className={hedgeOnly ? "notice notice--warn" : "notice notice--danger"}
-          >
+          <div key={`o-${i}`} className="notice notice--danger">
             <span className="notice__icon">!</span>
             <div>
               <p className="notice__title">
-                {hedgeOnly
-                  ? `A hedge and a spot line both apply from ${describeDate(
-                      overlap.period.from,
-                    )} to ${describeDate(overlap.period.to)}`
-                  : `${describeDate(overlap.period.from)} to ${describeDate(
-                      overlap.period.to,
-                    )}: the same consumption has ${
-                      spotLines.length === 2
-                        ? "two base prices"
-                        : `${spotLines.length} base prices`
-                    }`}
+                {describeRange(overlap.period)}:{" "}
+                {spotLines.length === 2 ? "two" : spotLines.length} contracts
+                charge for the same electricity
               </p>
               <p className="notice__body">
-                {hedgeOnly ? (
-                  <>
-                    This is normal — a hedge covers part of the volume and spot
-                    covers the rest. The real asset view leaves the division
-                    between{" "}
-                    {overlap.lines.map((l, idx) => (
-                      <span key={l.id}>
-                        {idx > 0 && " and "}
-                        <code>{priceOf(l)}</code>
-                      </span>
-                    ))}{" "}
-                    to the reader; it is drawn month by month below.
-                  </>
-                ) : (
-                  <>
-                    For {daysInPeriod(overlap.period)} days, every kWh of{" "}
-                    {overlap.direction} is claimed by{" "}
-                    {spotLines.map((l, idx) => (
-                      <span key={l.id}>
-                        {idx > 0 && (idx === spotLines.length - 1 ? " and " : ", ")}
-                        {lineLabel(l, draftId, contracts)} at{" "}
-                        <code>{priceOf(l)}</code>
-                      </span>
-                    ))}
-                    . Only one of these can be what is actually paid, and
-                    nothing shows which one the cost totals use.
-                  </>
-                )}
+                For these {daysInPeriod(overlap.period)} days,{" "}
+                {listOf(
+                  spotLines.map((l) => (
+                    <span key={l.id}>
+                      <strong>{name(l)}</strong> ({plainPrice(l)})
+                    </span>
+                  )),
+                )}{" "}
+                each cover all of {electricity(overlap.direction)}. You only
+                pay one of them, and nothing shows which one Companion’s cost
+                reports use.
               </p>
 
-              {!hedgeOnly && overlap.cost && (
+              {overlap.cost && (
                 <>
+                  <p className="notice__body">
+                    Estimated cost for these days:
+                  </p>
                   <table className="costs">
                     <tbody>
                       {overlap.cost.lines.map((c) => {
                         const line = spotLines.find((l) => l.id === c.lineId);
                         return (
                           <tr key={c.lineId}>
-                            <td>
-                              {line ? lineLabel(line, draftId, contracts) : c.lineId}
-                            </td>
+                            <td>{line ? name(line) : c.lineId}</td>
                             <td className="costs__formula">
-                              {line && <code>{priceOf(line)}</code>}
+                              {line && plainPrice(line)}
                             </td>
                             <td className="costs__eur">≈ {eur(c.costEur)}</td>
                           </tr>
@@ -170,21 +173,18 @@ export function ConflictNotice({
                     </tbody>
                   </table>
                   <p className="notice__fine">
-                    Estimated on about {kwh(overlap.cost.expectedKwh)} at this
-                    connection’s metered rate, priced at its recent
-                    consumption-weighted day-ahead average. The candidates are{" "}
-                    <strong>{eur(overlap.cost.spreadEur)} apart</strong>.
+                    A difference of{" "}
+                    <strong>{eur(overlap.cost.spreadEur)}</strong>. Based on
+                    this connection’s usual consumption (about{" "}
+                    {kwh(overlap.cost.expectedKwh)} over these days) and recent
+                    market prices.
                   </p>
                 </>
               )}
 
-              {!hedgeOnly && (
-                <p className="notice__body">
-                  Two base prices for the same energy is almost always a
-                  contract that was never ended. If only one is the live deal,
-                  the other needs an end date.
-                </p>
-              )}
+              <p className="notice__body">
+                This usually means the old contract was never ended.
+              </p>
 
               {ending && (
                 <button
@@ -210,14 +210,13 @@ export function ConflictNotice({
           <span className="notice__icon">!</span>
           <div>
             <p className="notice__title">
-              {describeDate(gap.period.from)} to {describeDate(gap.period.to)}{" "}
-              has no price
+              {describeRange(gap.period)}: no contract prices this electricity
             </p>
             <p className="notice__body">
-              {daysInPeriod(gap.period)} days of {gap.direction} are not covered
-              by any spot or hedge line. The cost engine has nothing to compute
-              for those days, so they will be missing from cost totals rather
-              than flagged in them.
+              For these {daysInPeriod(gap.period)} days, no market-price or
+              hedge line covers {electricity(gap.direction)}. Companion has
+              nothing to calculate a cost from, so these days are left out of
+              cost totals without a warning.
             </p>
           </div>
         </div>

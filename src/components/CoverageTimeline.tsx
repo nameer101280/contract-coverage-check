@@ -1,6 +1,7 @@
 import { Contract, ContractLine, Period } from "../domain/types";
 import { daysInPeriod, periodBounds } from "../domain/coverage";
 import { contractOf } from "../domain/contracts";
+import { plainPrice } from "./format";
 
 /**
  * Coverage over time.
@@ -33,20 +34,6 @@ function spanClass(line: ContractLine, isNew: boolean): string {
   if (line.type === "hedge") return "timeline__span timeline__span--hedge";
   if (line.type === "markup") return "timeline__span timeline__span--markup";
   return "timeline__span";
-}
-
-function priceLabel(line: ContractLine): string {
-  if (line.type === "spot") {
-    return `${line.scaling ?? 1} × spot + ${(line.constant ?? 0).toFixed(2)}`;
-  }
-  if (line.type === "hedge") {
-    return `${(line.hedgeVolume ?? 0).toLocaleString("en-GB", {
-      maximumFractionDigits: 1,
-    })} ${line.hedgeVolumeUnit ?? "kWh"} @ ${(
-      line.hedgePrice ?? 0
-    ).toFixed(2)}`;
-  }
-  return `+${(line.markup ?? line.constant ?? 0).toFixed(2)} €/MWh`;
 }
 
 interface Props {
@@ -104,7 +91,7 @@ export function CoverageTimeline({
                     line.period,
                   )} days)`}
                 >
-                  {width > 0.22 ? priceLabel(line) : ""}
+                  {width > 0.22 ? plainPrice(line) : ""}
                 </div>
               )}
             </div>
