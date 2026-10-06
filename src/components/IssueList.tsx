@@ -249,9 +249,9 @@ export function IssueList({
         <p className="issues__normal">
           <strong>Normal:</strong>{" "}
           {normalHedges.length === 1 ? "a fixed-price hedge" : "fixed-price hedges"} (
-          {listOf(normalHedges.map((l) => <span key={l.id}>{plainPrice(l)}</span>))}
+          {listOf(normalHedges.map((l) => <span key={l.id}>{name(l)}: {plainPrice(l)}</span>))}
           ) {normalHedges.length === 1 ? "runs" : "run"} alongside the market price (
-          {listOf(normalSpots.map((l) => <span key={l.id}>{plainPrice(l)}</span>))}
+          {listOf(normalSpots.map((l) => <span key={l.id}>{name(l)}: {plainPrice(l)}</span>))}
           ). The chart shows how they divide each month.
         </p>
       )}
