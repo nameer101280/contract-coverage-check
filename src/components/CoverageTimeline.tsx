@@ -1,6 +1,6 @@
-import { ContractLine, Period } from "../domain/types";
+import { Contract, ContractLine, Period } from "../domain/types";
 import { daysInPeriod, periodBounds } from "../domain/coverage";
-import { contractForLine } from "../data/mockData";
+import { contractOf } from "../domain/contracts";
 
 /**
  * Coverage over time.
@@ -40,7 +40,9 @@ function priceLabel(line: ContractLine): string {
     return `${line.scaling ?? 1} × spot + ${(line.constant ?? 0).toFixed(2)}`;
   }
   if (line.type === "hedge") {
-    return `${line.hedgeVolume ?? 0} ${line.hedgeVolumeUnit ?? "kWh"} @ ${(
+    return `${(line.hedgeVolume ?? 0).toLocaleString("en-GB", {
+      maximumFractionDigits: 1,
+    })} ${line.hedgeVolumeUnit ?? "kWh"} @ ${(
       line.hedgePrice ?? 0
     ).toFixed(2)}`;
   }
@@ -51,9 +53,15 @@ interface Props {
   lines: ContractLine[];
   draftLine: ContractLine;
   window: Period;
+  contracts: Contract[];
 }
 
-export function CoverageTimeline({ lines, draftLine, window }: Props) {
+export function CoverageTimeline({
+  lines,
+  draftLine,
+  window,
+  contracts,
+}: Props) {
   const rows = [...lines, draftLine];
 
   return (
@@ -70,7 +78,7 @@ export function CoverageTimeline({ lines, draftLine, window }: Props) {
       {rows.map((line) => {
         const isNew = line.id === draftLine.id;
         const { left, width } = periodBounds(line.period, window);
-        const contract = contractForLine(line.id);
+        const contract = contractOf(contracts, line.id);
 
         return (
           <div className="timeline__row" key={line.id}>

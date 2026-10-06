@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { ContractLine } from "./domain/types";
+import { Contract, ContractLine } from "./domain/types";
 import { daysInPeriod, findGaps, findOverlaps } from "./domain/coverage";
 import {
   hedgeCoverage,
@@ -11,10 +11,11 @@ import { overlapCost, weightedSpotPrice } from "./domain/cost";
 import {
   analysisWindow,
   asset,
-  existingLines,
+  contracts as initialContracts,
   marketPrices,
   meterReadings,
 } from "./data/mockData";
+import { Ending, contractOf, endContract } from "./domain/contracts";
 import { LineDraft, LineForm } from "./components/LineForm";
 import { ContextPanel } from "./components/ContextPanel";
 import { CoverageTimeline } from "./components/CoverageTimeline";
@@ -59,6 +60,13 @@ function draftToLine(draft: LineDraft): ContractLine {
 export default function App() {
   const [draft, setDraft] = useState<LineDraft>(INITIAL_DRAFT);
   const [saved, setSaved] = useState(false);
+  const [contracts, setContracts] = useState<Contract[]>(initialContracts);
+  const [resolved, setResolved] = useState<string | null>(null);
+
+  const existingLines = useMemo(
+    () => contracts.flatMap((c) => c.lines),
+    [contracts],
+  );
 
   // These summaries never change, so they are computed once.
   const consumption = useMemo(
@@ -99,7 +107,7 @@ export default function App() {
 
   const allLines = useMemo(
     () => [...existingLines, draftLine],
-    [draftLine],
+    [existingLines, draftLine],
   );
 
   const weightedPrice = useMemo(
@@ -122,6 +130,37 @@ export default function App() {
     () => findGaps(allLines, analysisWindow, "consumption"),
     [allLines],
   );
+
+  const applyEnding = ({ lineId, lastDay }: Ending) => {
+    const when = new Date(`${lastDay}T00:00:00Z`).toLocaleDateString("en-GB", {
+      day: "numeric",
+      month: "short",
+      year: "numeric",
+      timeZone: "UTC",
+    });
+
+    if (lineId === DRAFT_ID) {
+      setDraft({ ...draft, to: lastDay });
+      setResolved(`This new line now ends on ${when}.`);
+      return;
+    }
+
+    const target = contractOf(contracts, lineId);
+    if (!target) return;
+    setContracts(
+      contracts.map((c) => (c.id === target.id ? endContract(c, lastDay) : c)),
+    );
+    setResolved(
+      `${target.name} now ends on ${when}, handing over cleanly to this new line.`,
+    );
+  };
+
+  const reset = () => {
+    setDraft(INITIAL_DRAFT);
+    setContracts(initialContracts);
+    setResolved(null);
+    setSaved(false);
+  };
 
   return (
     <div className="page">
@@ -157,10 +196,7 @@ export default function App() {
             <button
               type="button"
               className="btn btn--ghost"
-              onClick={() => {
-                setDraft(INITIAL_DRAFT);
-                setSaved(false);
-              }}
+              onClick={reset}
             >
               Reset
             </button>
@@ -195,12 +231,26 @@ export default function App() {
             lines={existingLines}
             draftLine={draftLine}
             window={analysisWindow}
+            contracts={contracts}
           />
           <div style={{ marginTop: "var(--s-4)" }}>
+            {resolved && (
+              <div className="notice notice--ok">
+                <span className="notice__icon">✓</span>
+                <div>
+                  <p className="notice__title">{resolved}</p>
+                  <p className="notice__body">
+                    Reset puts the original contracts back.
+                  </p>
+                </div>
+              </div>
+            )}
             <ConflictNotice
               overlaps={overlaps}
               gaps={gaps}
               draftId={DRAFT_ID}
+              contracts={contracts}
+              onEnd={applyEnding}
             />
           </div>
         </div>

@@ -552,6 +552,18 @@ select:focus {
   border-color: var(--ink-400);
 }
 
+.btn--fix {
+  margin-top: var(--s-3);
+  background: var(--white);
+  border-color: currentColor;
+  color: inherit;
+  font-size: var(--t-sm);
+}
+
+.btn--fix:hover {
+  background: rgba(255, 255, 255, 0.6);
+}
+
 .actions__hint {
   font-size: var(--t-sm);
   color: var(--ink-500);

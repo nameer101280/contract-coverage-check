@@ -1,7 +1,7 @@
 import { Gap, daysInPeriod } from "../domain/coverage";
 import { PricedOverlap } from "../domain/cost";
-import { contractForLine } from "../data/mockData";
-import { ContractLine } from "../domain/types";
+import { Ending, contractOf, suggestEnding } from "../domain/contracts";
+import { Contract, ContractLine } from "../domain/types";
 
 /**
  * Conflict and gap warnings.
@@ -32,9 +32,13 @@ function describeDate(iso: string): string {
   });
 }
 
-function lineLabel(line: ContractLine, draftId: string): string {
+function lineLabel(
+  line: ContractLine,
+  draftId: string,
+  contracts: Contract[],
+): string {
   if (line.id === draftId) return "this new line";
-  const contract = contractForLine(line.id);
+  const contract = contractOf(contracts, line.id);
   return contract ? `${line.name} (${contract.name})` : line.name;
 }
 
@@ -43,7 +47,9 @@ function priceOf(line: ContractLine): string {
     return `${line.scaling ?? 1} × spot + ${(line.constant ?? 0).toFixed(2)}`;
   }
   if (line.type === "hedge") {
-    return `${line.hedgeVolume ?? 0} ${line.hedgeVolumeUnit ?? "kWh"} @ €${(
+    return `${(line.hedgeVolume ?? 0).toLocaleString("en-GB", {
+      maximumFractionDigits: 1,
+    })} ${line.hedgeVolumeUnit ?? "kWh"} @ €${(
       line.hedgePrice ?? 0
     ).toFixed(2)}/MWh`;
   }
@@ -68,9 +74,18 @@ interface Props {
   overlaps: PricedOverlap[];
   gaps: Gap[];
   draftId: string;
+  contracts: Contract[];
+  /** Apply a suggested ending: shorten a contract, or the new line */
+  onEnd: (ending: Ending) => void;
 }
 
-export function ConflictNotice({ overlaps, gaps, draftId }: Props) {
+export function ConflictNotice({
+  overlaps,
+  gaps,
+  draftId,
+  contracts,
+  onEnd,
+}: Props) {
   if (overlaps.length === 0 && gaps.length === 0) {
     return (
       <div className="notice notice--ok">
@@ -94,6 +109,7 @@ export function ConflictNotice({ overlaps, gaps, draftId }: Props) {
         const spotLines = overlap.lines.filter((l) => l.type === "spot");
         const hedgeOnly =
           spotLines.length < 2 && overlap.lines.some((l) => l.type === "hedge");
+        const ending = hedgeOnly ? null : suggestEnding(overlap);
 
         return (
           <div
@@ -136,7 +152,8 @@ export function ConflictNotice({ overlaps, gaps, draftId }: Props) {
                     {spotLines.map((l, idx) => (
                       <span key={l.id}>
                         {idx > 0 && (idx === spotLines.length - 1 ? " and " : ", ")}
-                        {lineLabel(l, draftId)} at <code>{priceOf(l)}</code>
+                        {lineLabel(l, draftId, contracts)} at{" "}
+                        <code>{priceOf(l)}</code>
                       </span>
                     ))}
                     . Only one of these can be what is actually paid, and
@@ -153,7 +170,9 @@ export function ConflictNotice({ overlaps, gaps, draftId }: Props) {
                         const line = spotLines.find((l) => l.id === c.lineId);
                         return (
                           <tr key={c.lineId}>
-                            <td>{line ? lineLabel(line, draftId) : c.lineId}</td>
+                            <td>
+                              {line ? lineLabel(line, draftId, contracts) : c.lineId}
+                            </td>
                             <td className="costs__formula">
                               {line && <code>{priceOf(line)}</code>}
                             </td>
@@ -178,6 +197,21 @@ export function ConflictNotice({ overlaps, gaps, draftId }: Props) {
                   contract that was never ended. If only one is the live deal,
                   the other needs an end date.
                 </p>
+              )}
+
+              {ending && (
+                <button
+                  type="button"
+                  className="btn btn--fix"
+                  onClick={() => onEnd(ending)}
+                >
+                  End{" "}
+                  {ending.lineId === draftId
+                    ? "this new line"
+                    : (contractOf(contracts, ending.lineId)?.name ??
+                      "that line")}{" "}
+                  on {describeDate(ending.lastDay)}
+                </button>
               )}
             </div>
           </div>

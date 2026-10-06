@@ -1,7 +1,6 @@
 import {
   Asset,
   Contract,
-  ContractLine,
   MarketPrice,
   MeterReading,
 } from "../domain/types";
@@ -158,13 +157,6 @@ export const contracts: Contract[] = [
  * contract never ended. That is the mistake I made on the real platform, and
  * the one this prototype catches before it is saved.
  */
-
-/** Every line that prices this asset, flattened, as the asset view shows them. */
-export const existingLines: ContractLine[] = contracts.flatMap((c) => c.lines);
-
-/** Which contract a line came from, for naming it in a warning. */
-export const contractForLine = (lineId: string): Contract | undefined =>
-  contracts.find((c) => c.lines.some((l) => l.id === lineId));
 
 /** The window the coverage timeline is drawn against. */
 export const analysisWindow = { from: "2026-01-01", to: "2026-12-31" };
