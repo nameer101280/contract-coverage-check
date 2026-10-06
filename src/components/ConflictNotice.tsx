@@ -1,4 +1,5 @@
-import { Gap, Overlap, daysInPeriod } from "../domain/coverage";
+import { Gap, daysInPeriod } from "../domain/coverage";
+import { PricedOverlap } from "../domain/cost";
 import { contractForLine } from "../data/mockData";
 import { ContractLine } from "../domain/types";
 
@@ -49,8 +50,22 @@ function priceOf(line: ContractLine): string {
   return `+€${(line.constant ?? 0).toFixed(2)}/MWh`;
 }
 
+/** Whole euros once the amount is large enough that cents are noise. */
+function eur(n: number): string {
+  return `€${n.toLocaleString("en-GB", {
+    minimumFractionDigits: n < 100 ? 2 : 0,
+    maximumFractionDigits: n < 100 ? 2 : 0,
+  })}`;
+}
+
+function kwh(n: number): string {
+  return n >= 100_000
+    ? `${(n / 1000).toLocaleString("en-GB", { maximumFractionDigits: 0 })} MWh`
+    : `${n.toLocaleString("en-GB", { maximumFractionDigits: 0 })} kWh`;
+}
+
 interface Props {
-  overlaps: Overlap[];
+  overlaps: PricedOverlap[];
   gaps: Gap[];
   draftId: string;
 }
@@ -125,13 +140,45 @@ export function ConflictNotice({ overlaps, gaps, draftId }: Props) {
                       </span>
                     ))}
                     . Only one of these can be what is actually paid, and
-                    nothing shows which one the cost totals use. Two base
-                    prices for the same energy is almost always a contract
-                    that was never ended. If only one is the live deal, the
-                    other needs an end date.
+                    nothing shows which one the cost totals use.
                   </>
                 )}
               </p>
+
+              {!hedgeOnly && overlap.cost && (
+                <>
+                  <table className="costs">
+                    <tbody>
+                      {overlap.cost.lines.map((c) => {
+                        const line = spotLines.find((l) => l.id === c.lineId);
+                        return (
+                          <tr key={c.lineId}>
+                            <td>{line ? lineLabel(line, draftId) : c.lineId}</td>
+                            <td className="costs__formula">
+                              {line && <code>{priceOf(line)}</code>}
+                            </td>
+                            <td className="costs__eur">≈ {eur(c.costEur)}</td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                  <p className="notice__fine">
+                    Estimated on about {kwh(overlap.cost.expectedKwh)} at this
+                    connection’s metered rate, priced at its recent
+                    consumption-weighted day-ahead average. The candidates are{" "}
+                    <strong>{eur(overlap.cost.spreadEur)} apart</strong>.
+                  </p>
+                </>
+              )}
+
+              {!hedgeOnly && (
+                <p className="notice__body">
+                  Two base prices for the same energy is almost always a
+                  contract that was never ended. If only one is the live deal,
+                  the other needs an end date.
+                </p>
+              )}
             </div>
           </div>
         );

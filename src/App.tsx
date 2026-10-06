@@ -7,6 +7,7 @@ import {
   toKwh,
 } from "./domain/volume";
 import { compareToMarket, summariseMarket } from "./domain/market";
+import { overlapCost, weightedSpotPrice } from "./domain/cost";
 import {
   analysisWindow,
   asset,
@@ -101,7 +102,22 @@ export default function App() {
     [draftLine],
   );
 
-  const overlaps = useMemo(() => findOverlaps(allLines), [allLines]);
+  const weightedPrice = useMemo(
+    () => weightedSpotPrice(meterReadings, marketPrices),
+    [],
+  );
+
+  const overlaps = useMemo(
+    () =>
+      findOverlaps(allLines).map((o) => ({
+        ...o,
+        cost:
+          weightedPrice === null
+            ? null
+            : overlapCost(o, consumption.perDayKwh, weightedPrice),
+      })),
+    [allLines, consumption.perDayKwh, weightedPrice],
+  );
   const gaps = useMemo(
     () => findGaps(allLines, analysisWindow, "consumption"),
     [allLines],

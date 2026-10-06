@@ -471,6 +471,40 @@ select:focus {
   font-size: var(--t-sm);
 }
 
+.notice__body + .notice__body {
+  margin-top: var(--s-2);
+}
+
+.notice__fine {
+  margin: var(--s-1) 0 var(--s-2);
+  font-size: var(--t-xs);
+  opacity: 0.85;
+}
+
+.costs {
+  width: 100%;
+  border-collapse: collapse;
+  margin-top: var(--s-3);
+  font-size: var(--t-sm);
+}
+
+.costs td {
+  padding: var(--s-1) 0;
+  border-top: 1px solid rgba(155, 28, 28, 0.15);
+}
+
+.costs__formula {
+  padding-left: var(--s-3) !important;
+}
+
+.costs__eur {
+  text-align: right;
+  font-family: var(--mono);
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.costs code,
 .notice__body code {
   font-family: var(--mono);
   background: rgba(0, 0, 0, 0.05);
