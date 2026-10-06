@@ -4,6 +4,7 @@ import {
   MarketPrice,
   MeterReading,
 } from "../domain/types";
+import { seededRandom } from "./random";
 
 /**
  * Data from my own session on the platform, not invented.
@@ -40,12 +41,7 @@ function buildReadings(): MeterReading[] {
   const start = Date.parse("2026-09-01T00:00:00Z");
   const intervals = 36 * 96; // 1 Sep to 6 Oct, in quarter hours
 
-  // Small deterministic pseudo-random source, so no dependency and no drift.
-  let seed = 20260901;
-  const rand = () => {
-    seed = (seed * 1103515245 + 12345) & 0x7fffffff;
-    return seed / 0x7fffffff;
-  };
+  const rand = seededRandom(20260901);
 
   for (let i = 0; i < intervals; i++) {
     const at = start + i * 900_000;
@@ -88,11 +84,7 @@ export const meterReadings: MeterReading[] = buildReadings();
 function buildPrices(): MarketPrice[] {
   const out: MarketPrice[] = [];
   const start = Date.parse("2026-09-01T00:00:00Z");
-  let seed = 7215;
-  const rand = () => {
-    seed = (seed * 1103515245 + 12345) & 0x7fffffff;
-    return seed / 0x7fffffff;
-  };
+  const rand = seededRandom(7215);
 
   for (let i = 0; i < 36 * 24; i++) {
     const at = start + i * 3_600_000;

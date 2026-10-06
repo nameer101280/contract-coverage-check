@@ -39,8 +39,51 @@ body {
   line-height: 1.5;
 }
 
+.scenarios {
+  display: inline-grid;
+  grid-auto-flow: column;
+  gap: var(--s-1);
+  margin-top: var(--s-4);
+  padding: var(--s-1);
+  background: var(--ink-100);
+  border-radius: var(--radius);
+}
+
+.scenario {
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  padding: var(--s-2) var(--s-3);
+}
+
+.scenario:hover {
+  background: rgba(255, 255, 255, 0.6);
+}
+
+.scenario[aria-pressed="true"] {
+  background: var(--white);
+  border-color: var(--ink-200);
+  box-shadow: var(--shadow);
+}
+
+.scenario__label {
+  display: block;
+  font-size: var(--t-md);
+  font-weight: 600;
+}
+
+.scenario__source {
+  display: block;
+  font-size: var(--t-xs);
+  color: var(--ink-500);
+}
+
 .asset-chip {
-  display: inline-flex;
+  display: flex;
+  width: fit-content;
   align-items: center;
   gap: var(--s-2);
   background: var(--white);
