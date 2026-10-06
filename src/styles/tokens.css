@@ -1,0 +1,55 @@
+/* Design tokens.
+   A deliberately small palette: one accent, one warning, one danger, one
+   positive, and a neutral ramp. Conflicts in this product must read as
+   information rather than failure, so amber carries the overlap state and red
+   is reserved for values that cannot be right. */
+
+:root {
+  --ink-900: #16181d;
+  --ink-700: #3b4049;
+  --ink-500: #6b7280;
+  --ink-400: #9aa1ad;
+  --ink-200: #e3e6ea;
+  --ink-100: #f1f3f5;
+  --ink-050: #f8f9fa;
+  --white: #ffffff;
+
+  --accent-700: #3b35c7;
+  --accent-600: #4f46e5;
+  --accent-100: #eceafe;
+
+  --warn-700: #8a5200;
+  --warn-600: #b45309;
+  --warn-200: #fbdcb4;
+  --warn-100: #fef3e2;
+
+  --danger-700: #9b1c1c;
+  --danger-600: #c62828;
+  --danger-100: #fdecec;
+
+  --ok-700: #15694a;
+  --ok-100: #e6f5ef;
+
+  --s-1: 4px;
+  --s-2: 8px;
+  --s-3: 12px;
+  --s-4: 16px;
+  --s-5: 24px;
+  --s-6: 32px;
+
+  --font: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica,
+    Arial, sans-serif;
+  --mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, monospace;
+
+  --t-xs: 11px;
+  --t-sm: 12px;
+  --t-md: 14px;
+  --t-lg: 16px;
+  --t-xl: 20px;
+  --t-2xl: 26px;
+
+  --radius: 8px;
+  --radius-sm: 5px;
+  --border: 1px solid var(--ink-200);
+  --shadow: 0 1px 2px rgba(22, 24, 29, 0.05);
+}
