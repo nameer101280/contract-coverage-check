@@ -1,179 +1,161 @@
 # Contract coverage check
 
-A prototype for the Companion.energy product engineer case.
+A prototype for the Companion.energy contract management case.
 
-It is a contract line editor that shows three things the real wizard doesn't:
-what the connection actually consumes, what the market currently costs, and
-what already prices that connection. None of it is new data — all three live
-one click away from the real form.
+It is a contract line editor for a single grid connection. As you fill in a
+line, it checks the line against what is already known about that connection:
+how much it consumes, how much power it can physically draw, what day-ahead
+electricity has cost recently, and which contract lines already price it.
 
----
-
-## The problem
-
-I registered a real grid connection on the platform (my own flat in Leuven,
-Fluvius as DSO, connected to my actual digital meter) and built a contract the
-way a customer would.
-
-I hedged **100 kWh at €60/MWh** on a connection that consumes roughly
-**3,800 kWh a year**. That is **2.6%** of annual consumption, about nine days,
-on a contract running twelve months. Nothing told me.
-
-Then I did what a customer does when they switch supplier: created a second
-contract starting 1 July and forgot to end the first. Six months of 2026 are
-now priced twice by two lines both named "Day-ahead energy". Both contracts
-show a green *Active* badge. Nothing told me that either.
-
-The platform could have caught both without acquiring anything new:
-
-| What I needed to know | Where the platform already holds it |
-| --- | --- |
-| What this connection can physically draw | Asset configuration — 7.4 kW |
-| What it actually consumes | Fluvius integration — 15-minute readings |
-| What electricity currently costs | Market Data — day-ahead prices |
-| What already prices this asset | Contracts → By Asset |
-
-The asset configuration screen even states the principle: power limits are
-collected for *"validating that your energy flows stay within the physical
-boundaries of your installation."* The product knows it should validate against
-reality. It just doesn't, on the screen where contracts are made.
-
-Contracts are the input to every number Companion sells — cost dashboards,
-budgets, forecasts, savings, and the optimisation engine itself. A wrong
-contract doesn't throw an error. It produces a plausible number that propagates
-silently.
+![The app on first load](docs/screenshot.png)
 
 ---
 
 ## Running it
 
+Requires Node.js 18 or newer.
+
 ```bash
 npm install
-npm run dev      # http://localhost:5173
-npm test         # 59 tests
-npm run build
+npm run dev      # then open http://localhost:5173
 ```
 
-It opens pre-filled with the mistake: a second day-ahead line from July, on a
-connection already priced for the whole year.
+Other commands:
 
-Things to try:
+```bash
+npm test         # run the test suite (70 tests)
+npm run build    # type-check and build for production
+```
 
-- Change the **hedge volume** to 2 MWh and watch the coverage verdict move from
-  *negligible* to *partial*
-- Set the **hedge price** to 5 — the value the real form accepted from me
-  without comment
-- Drag the **start date** to 1 January and watch the overlap grow to the full
-  year
-- Set it to **1 August** and see a gap in July appear instead
+There is no backend, login or database. All data is mocked and built into the
+app.
 
 ---
 
-## How it's built
+## What's on the screen
+
+The app opens with a new **Day-ahead energy** line from 1 July to 31 December
+2026, on a connection whose existing contract (*Engie supply 2026*) already
+prices the whole year.
+
+**New contract line** (left). The form for the line being added:
+
+- Line types: **Spot price**, **Hedge** and **Markup**
+- Energy direction: consumption or injection
+- Spot: scaling and constant, with a formula preview that also shows what the
+  line would have cost per MWh at recent day-ahead prices
+- Hedge: volume in **kWh** or **kW**, and a price in €/MWh
+- Markup: a flat €/MWh amount
+- The dates the line applies
+
+**Context panel** (right). Updates as you type:
+
+- *This connection:* metered consumption, the yearly figure it extrapolates to,
+  the highest 15-minute draw, and the physical power limit (7.4 kW)
+- *What this hedge covers* (hedge lines only): the share of the connection's
+  expected consumption during the line's dates, the same volume expressed in
+  days of typical use, and a warning when the volume looks wrong
+- *Market reference:* the recent day-ahead average and range, and how a hedge
+  price compares with that average
+
+**Coverage timeline** (bottom). Every line pricing the connection across 2026,
+with the new line included, followed by a notice for each overlap or gap.
+
+**Add line** stores nothing. It only confirms that warnings do not block
+saving.
+
+---
+
+## What it checks
+
+Nothing is ever blocked. Every check below produces a warning or a note.
+
+| Situation | What the app shows |
+| --- | --- |
+| Two spot lines for the same direction on overlapping dates | A red warning naming both lines, their prices and the number of days that overlap |
+| A hedge and a spot line on the same dates | An amber note: this is normal, but the screen does not show how the volume divides between them |
+| One line ending 30 June and the next starting 1 July | Nothing. A clean handover is not an overlap |
+| A markup on the same dates as anything else | Nothing. Markups add to a price rather than compete with it |
+| Three or more lines overlapping on the same dates | One combined warning, not one per pair |
+| Days in 2026 with no spot or hedge line for consumption | A gap warning |
+| A hedge under 5% of expected consumption for its dates | "This hedge is very small for this connection" |
+| A hedge over 100% of expected consumption for its dates | "This hedge exceeds what the connection consumes" |
+| A hedge in kW above the 7.4 kW physical limit | "More power than this connection can draw" |
+| A hedge price more than 5× above or below the market average | Flagged as a likely typo or unit mix-up |
+| A hedge price within that range | Shown as a percentage above or below the market, without a warning |
+
+A hedge in **kW** is read as that much power in every hour of the line's dates.
+A hedge in **kWh** is a total amount of energy over those dates.
+
+---
+
+## Things to try
+
+1. **Change Applies from to 1 January.** The overlap warning grows to the full
+   year.
+2. **Switch the line type to Hedge, keeping 1 January.** The 100 kWh volume is
+   2.7% of the year's expected consumption and is flagged as very small.
+3. **Set Applies from back to 1 July and the volume to 2,000 kWh.** That is
+   about half a year's consumption, but more than the connection uses between
+   July and December, so it is flagged as exceeding it.
+4. **Switch the unit to kW and set the volume to 10.** That is 44,160 kWh over
+   the six months, and more power than the 7.4 kW connection can draw.
+5. **Set the hedge price to 5.** It is flagged as more than five times below
+   the market. Set it to 60 and it is reported as 63% below the market,
+   without a warning.
+
+Gap warnings are covered by the tests but cannot be triggered from the screen,
+because the existing contract already covers all of 2026.
+
+---
+
+## Mock data
+
+Everything lives in [`src/data/mockData.ts`](src/data/mockData.ts) and is
+generated deterministically, so the app looks the same on every load.
+
+| Data | Details |
+| --- | --- |
+| Connection | Grid connection "Flavius", Fluvius Zenne-Dijle, physical limit 7.4 kW |
+| Meter readings | 15-minute readings from 1 September to 6 October 2026, 369.73 kWh in total, with a household-style daily profile |
+| Day-ahead prices | Hourly prices for the same period, averaging about €161/MWh, with a midday dip, an evening peak, occasional spikes and occasional negative hours |
+| Existing contract | *Engie supply 2026*, 1 January to 31 December 2026: a spot line at `1 × spot + 9.00` and a hedge of 100 kWh at €60/MWh |
+
+---
+
+## Project structure
 
 ```
 src/
-  domain/          pure logic, no React, 59 tests
-    types.ts       the model, narrowed to three line types
-    coverage.ts    overlap and gap detection
-    volume.ts      consumption summary, hedge coverage, unit conversion
-    market.ts      price comparison, effective spot price
+  domain/              logic only, no React
+    types.ts           the data model: lines, contracts, assets, readings
+    coverage.ts        overlap and gap detection
+    volume.ts          consumption summary, hedge coverage, kW/kWh conversion
+    market.ts          market summary and hedge price comparison
+    *.test.ts          tests for the above
   data/
-    mockData.ts    figures from my own connection
-  components/      rendering only; no decisions
-  styles/          design tokens + one stylesheet
+    mockData.ts        the connection, readings, prices and existing contract
+  components/
+    LineForm.tsx       the new line form
+    ContextPanel.tsx   consumption, hedge coverage and market reference
+    CoverageTimeline.tsx  all lines on one 2026 axis
+    ConflictNotice.tsx    overlap and gap notices
+  styles/
+    tokens.css         colours, spacing and type scale
+    app.css            all component styles
+  App.tsx              wires the data, the logic and the components together
 ```
 
-The domain layer is where the thinking is, and it is tested without rendering
-anything. The components render; they don't decide.
+All decisions are made in `domain/`, which is tested without rendering
+anything. The components only display the results.
 
-**The interesting logic is `coverage.ts`.** Two lines conflict when they move
-energy the same way, both set a base price, and their periods intersect. The
-edge cases are where the judgement sits:
-
-- A contract ending 30 June and the next starting 1 July is **not** an overlap.
-  That's what a correct supplier switch looks like, and flagging it would make
-  the warning useless.
-- A **markup** never conflicts. It's additive — it's meant to sit on top of a
-  base price.
-- A **hedge against a spot line** is flagged, but with different wording,
-  because it's legitimate. The hedge covers part of the volume and spot covers
-  the rest; the problem is that nothing shows how the volume divides.
-- Three lines sharing a period surface as **one** warning, not three pairwise
-  ones. Repeating near-identical warnings is how an alert layer gets ignored.
+Built with React 18, TypeScript, Vite and Vitest. Styling is plain CSS.
 
 ---
 
-## Decisions
+## Scope
 
-**Warnings, not blocks.** Nothing is prevented from saving. Some overlaps are
-correct, and a genuine supplier handover can overlap by a few days. Refusing to
-save a real deal is a worse failure than permitting a mistaken one, so the user
-keeps the decision and simply stops making it blind.
-
-**Context panel, not form validation.** Form validation frames this as input
-hygiene. The actual problem is a missing feedback loop, and it matters as much
-when auditing contracts that already exist as when creating one.
-
-**Three line types, not seventeen.** Enough to demonstrate the pattern — two
-that set a price and one that adds to it. A catalogue would be breadth where
-the case asked for depth.
-
-**Tests on the domain layer only.** Overlap detection has real edge cases:
-containment, adjacency, same-day boundaries, kWh versus MWh. That's where bugs
-live. Testing React rendering in a four-hour prototype costs time and proves
-little.
-
-**Hand-written CSS with a token file** rather than a utility framework, because
-the information hierarchy is the point of the screen and I wanted those
-decisions to be explicit.
-
----
-
-## What's mocked
-
-- **Consumption** — reconstructed to match the shape and total of the real
-  Fluvius feed on my connection: 634.8 kWh across 61 days, baseline ~0.1 kW
-  overnight, morning bump, evening peak near 1 kW. Deterministic, so the
-  prototype looks the same every load.
-- **Day-ahead prices** — 30 days of hourly prices with a plausible Belgian
-  shape: midday solar dip, evening scarcity peak, occasional negative hours.
-  Averages €73/MWh.
-- **The existing contract** — Engie supply 2026, exactly as I created it.
-
-No backend, no auth, no persistence. The case said mock data is expected.
-
----
-
-## Deliberately not built
-
-Responsive layout below tablet. Editing or deleting existing lines. The other
-fourteen line types. Time-of-day windows on lines. Tiered tariffs. Persistence.
-Deployment.
-
----
-
-## If I had longer
-
-**Volume allocation across lines.** The hardest and most valuable version of
-this problem: showing *which* volume a hedge displaces and what remains on
-spot, as a stacked view over the year. I understood the problem but it needs
-real modelling rather than an afternoon.
-
-**Unit reconciliation.** The hedge form asks for a volume in "kW or kWh" and a
-price in €/MWh — three units, two of them a factor of 1,000 apart, on adjacent
-fields. Normalising that at the model level would remove a whole class of
-error.
-
-**The Dutch grid tariffs.** A connection's cost structure includes eleven
-Fluvius lines in Dutch, inside an English interface, in four different units
-with no total. That's a separate problem worth its own case.
-
----
-
-## On AI assistance
-
-I used Claude while building this, as the case invites. The domain logic,
-the edge-case decisions and the product judgement are mine, and the comments in
-`coverage.ts` record the reasoning rather than describing the code. I can walk
-through any line of it.
+The app covers three line types (spot, hedge and markup) for one connection's
+consumption in 2026. It does not include editing or deleting existing lines,
+time-of-day windows, the other line types, saving, or layouts below tablet
+width.
