@@ -15,7 +15,7 @@ import { ContractLine } from "../domain/types";
  *
  * 2. Each warning names the specific contracts and the specific period. A
  *    message saying "this contract may conflict" is noise; one saying
- *    "July to December would be priced by Engie and Luminus" is actionable.
+ *    "July to December is claimed by both Engie and Luminus" is actionable.
  *
  * 3. A hedge overlapping a spot line is described differently from two spot
  *    lines overlapping, because they are different situations. The first is
@@ -62,10 +62,11 @@ export function ConflictNotice({ overlaps, gaps, draftId }: Props) {
         <span className="notice__icon">✓</span>
         <div>
           <p className="notice__title">
-            No double-pricing or uncovered periods
+            No competing prices or uncovered periods
           </p>
           <p className="notice__body">
-            Every day in this window is priced exactly once for consumption.
+            Every day in this window has exactly one base price for
+            consumption.
           </p>
         </div>
       </div>
@@ -116,16 +117,18 @@ export function ConflictNotice({ overlaps, gaps, draftId }: Props) {
                 ) : (
                   <>
                     For {daysInPeriod(overlap.period)} days, every kWh of{" "}
-                    {overlap.direction} would be priced by{" "}
+                    {overlap.direction} is claimed by{" "}
                     {spotLines.map((l, idx) => (
                       <span key={l.id}>
                         {idx > 0 && (idx === spotLines.length - 1 ? " and " : ", ")}
                         {lineLabel(l, draftId)} at <code>{priceOf(l)}</code>
                       </span>
                     ))}
-                    . Two base prices for the same energy is almost always a
-                    contract that was never ended. If only one is the live deal,
-                    the other needs an end date.
+                    . Only one of these can be what is actually paid, and
+                    nothing shows which one the cost totals use. Two base
+                    prices for the same energy is almost always a contract
+                    that was never ended. If only one is the live deal, the
+                    other needs an end date.
                   </>
                 )}
               </p>

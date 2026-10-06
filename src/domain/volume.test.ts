@@ -1,10 +1,10 @@
 import { describe, expect, it } from "vitest";
 import {
+  exceedsPhysicalLimit,
   hedgeCoverage,
   hoursAtPhysicalLimit,
   summariseConsumption,
   toKwh,
-  toMwh,
 } from "./volume";
 import {
   compareToMarket,
@@ -22,18 +22,41 @@ function readings(count: number, kwhEach: number): MeterReading[] {
   }));
 }
 
+const HOURS_IN_2026 = 365 * 24;
+
 describe("unit conversion", () => {
-  it("converts MWh to kWh", () => {
-    expect(toKwh(1, "MWh")).toBe(1000);
-    expect(toKwh(0.1, "MWh")).toBe(100);
+  it("leaves kWh alone, whatever the period", () => {
+    expect(toKwh(100, "kWh", HOURS_IN_2026)).toBe(100);
   });
 
-  it("leaves kWh alone", () => {
-    expect(toKwh(100, "kWh")).toBe(100);
+  it("holds kW for every hour of the period", () => {
+    expect(toKwh(1, "kW", HOURS_IN_2026)).toBe(8760);
+    expect(toKwh(1, "kW", 24)).toBe(24);
   });
 
-  it("round-trips", () => {
-    expect(toMwh(toKwh(2.5, "MWh"))).toBeCloseTo(2.5);
+  it("shows how far apart my hedge and its kW twin are", () => {
+    // The same 100 in the same field: one dropdown apart.
+    expect(toKwh(100, "kW", HOURS_IN_2026) / toKwh(100, "kWh", HOURS_IN_2026))
+      .toBe(8760);
+  });
+});
+
+describe("exceedsPhysicalLimit", () => {
+  it("flags power the connection cannot draw", () => {
+    expect(exceedsPhysicalLimit(10, "kW", 7.4)).toBe(true);
+  });
+
+  it("allows power within the limit", () => {
+    expect(exceedsPhysicalLimit(5, "kW", 7.4)).toBe(false);
+    expect(exceedsPhysicalLimit(7.4, "kW", 7.4)).toBe(false);
+  });
+
+  it("ignores amounts of energy, which have no instantaneous limit", () => {
+    expect(exceedsPhysicalLimit(100, "kWh", 7.4)).toBe(false);
+  });
+
+  it("does not flag anything when no limit is configured", () => {
+    expect(exceedsPhysicalLimit(10, "kW", 0)).toBe(false);
   });
 });
 
@@ -67,50 +90,75 @@ describe("summariseConsumption", () => {
   });
 
   it("reproduces my own connection's figures", () => {
-    // 634.81 kWh metered over roughly 61 days on the real Fluvius feed,
-    // which annualises to about 3,800 kWh/year.
-    const s = summariseConsumption(readings(61 * 96, 634.81 / (61 * 96)));
-    expect(s.totalKwh).toBeCloseTo(634.81, 1);
+    // 369.73 kWh metered from 1 Sep to 6 Oct 2026 on the real Fluvius feed,
+    // which annualises to about 3,750 kWh/year.
+    const s = summariseConsumption(readings(36 * 96, 369.73 / (36 * 96)));
+    expect(s.totalKwh).toBeCloseTo(369.73, 1);
     expect(s.annualisedKwh).toBeGreaterThan(3500);
     expect(s.annualisedKwh).toBeLessThan(4100);
   });
 });
 
 describe("hedgeCoverage", () => {
-  const summary = summariseConsumption(readings(61 * 96, 634.81 / (61 * 96)));
+  const summary = summariseConsumption(readings(36 * 96, 369.73 / (36 * 96)));
+  const YEAR = 365;
+  const JULY_TO_DECEMBER = 184;
 
-  it("calls a 100 kWh hedge negligible on a 3,800 kWh/year connection", () => {
+  it("calls my 100 kWh full-year hedge negligible", () => {
     // This is the case from my own session. The real form accepted it with
     // no comment.
-    const c = hedgeCoverage(100, summary);
-    expect(c.percentOfAnnual).toBeGreaterThan(2);
-    expect(c.percentOfAnnual).toBeLessThan(3);
+    const c = hedgeCoverage(100, summary, YEAR);
+    expect(c.percentOfPeriod).toBeGreaterThan(2);
+    expect(c.percentOfPeriod).toBeLessThan(3);
     expect(c.verdict).toBe("negligible");
-    expect(c.equivalentDays).toBeCloseTo(9.6, 0);
+    expect(c.equivalentDays).toBeCloseTo(9.7, 0);
   });
 
-  it("calls a half-year hedge partial", () => {
-    const c = hedgeCoverage(summary.annualisedKwh * 0.4, summary);
+  it("judges a hedge against its own period, not a whole year", () => {
+    // 2 MWh is half a year's consumption, but more than this connection uses
+    // between July and December.
+    expect(hedgeCoverage(2000, summary, YEAR).verdict).toBe("partial");
+
+    const halfYear = hedgeCoverage(2000, summary, JULY_TO_DECEMBER);
+    expect(halfYear.expectedKwh).toBeCloseTo(summary.perDayKwh * 184);
+    expect(halfYear.percentOfPeriod).toBeGreaterThan(100);
+    expect(halfYear.verdict).toBe("exceeds");
+  });
+
+  it("calls a 40% hedge partial", () => {
+    const c = hedgeCoverage(summary.perDayKwh * YEAR * 0.4, summary, YEAR);
     expect(c.verdict).toBe("partial");
   });
 
   it("calls a mostly-hedged position substantial", () => {
-    const c = hedgeCoverage(summary.annualisedKwh * 0.8, summary);
+    const c = hedgeCoverage(summary.perDayKwh * YEAR * 0.8, summary, YEAR);
     expect(c.verdict).toBe("substantial");
   });
 
   it("flags hedging more than the connection consumes", () => {
     // Paying a fixed price for energy you will never use.
-    const c = hedgeCoverage(summary.annualisedKwh * 1.5, summary);
+    const c = hedgeCoverage(summary.perDayKwh * YEAR * 1.5, summary, YEAR);
+    expect(c.verdict).toBe("exceeds");
+  });
+
+  it("puts my hedge in kW at over two hundred times my yearly use", () => {
+    const c = hedgeCoverage(toKwh(100, "kW", HOURS_IN_2026), summary, YEAR);
+    expect(c.percentOfPeriod).toBeGreaterThan(20_000);
     expect(c.verdict).toBe("exceeds");
   });
 
   it("returns none for a zero or missing hedge", () => {
-    expect(hedgeCoverage(0, summary).verdict).toBe("none");
+    expect(hedgeCoverage(0, summary, YEAR).verdict).toBe("none");
+  });
+
+  it("returns none for a period with no days in it", () => {
+    expect(hedgeCoverage(100, summary, 0).verdict).toBe("none");
   });
 
   it("returns none when there is no consumption data to compare against", () => {
-    expect(hedgeCoverage(100, summariseConsumption([])).verdict).toBe("none");
+    expect(
+      hedgeCoverage(100, summariseConsumption([]), YEAR).verdict,
+    ).toBe("none");
   });
 });
 
@@ -190,6 +238,29 @@ describe("compareToMarket", () => {
 
   it("returns unset when there is no market data", () => {
     expect(compareToMarket(60, summariseMarket([])).verdict).toBe("unset");
+  });
+
+  describe("at the real September 2026 price level", () => {
+    // Belgian day-ahead averaged €161.40/MWh from 1 Sep to 6 Oct 2026.
+    const today = summariseMarket(prices([161.4]));
+
+    it("does not flag my €60 hedge, which may simply be older", () => {
+      const c = compareToMarket(60, today);
+      expect(c.deltaPercent).toBeCloseTo(-62.8, 0);
+      expect(c.verdict).toBe("below-market");
+    });
+
+    it("still flags the €5 the real form accepted", () => {
+      expect(compareToMarket(5, today).verdict).toBe("implausible-low");
+    });
+
+    it("flags a €/kWh price typed into a €/MWh field", () => {
+      expect(compareToMarket(0.06, today).verdict).toBe("implausible-low");
+    });
+
+    it("flags a price more than five times the market", () => {
+      expect(compareToMarket(900, today).verdict).toBe("implausible-high");
+    });
   });
 });
 

@@ -4,9 +4,9 @@ import { MarketPrice } from "./types";
  * Market comparison.
  *
  * Companion has day-ahead prices on its Market Data page. The hedge price
- * field does not use them, which is why I was able to enter €5/MWh — roughly a
- * twentieth of any real Belgian price — and have it accepted with a formula
- * preview reading "5.00 €/MWh" as though that were normal.
+ * field does not use them, which is why I was able to enter €5/MWh — about a
+ * thirtieth of the Belgian average at the time — and have it accepted with a
+ * formula preview reading "5.00 €/MWh" as though that were normal.
  */
 
 export interface MarketSummary {
@@ -49,34 +49,42 @@ export interface PriceComparison {
 }
 
 /**
+ * Beyond this factor from the market average, a price is treated as a mistake.
+ *
+ * A hedge is priced when it is signed, not today, so it can legitimately sit
+ * far from the current average: my €60 hedge is 63% below September 2026's
+ * €161. What the market does not do is move fivefold between signing and
+ * delivery, whereas the mistakes this exists for are a dropped digit (×10) or
+ * €/kWh typed into a €/MWh field (×1,000). Five sits between the two.
+ */
+const IMPLAUSIBLE_FACTOR = 5;
+
+/**
  * How a fixed price compares with the recent market average.
  *
  * A hedge is meant to differ from spot — that is the entire point of buying
- * certainty — so being above or below the average is not an error. The
- * thresholds only separate "a position someone might deliberately take" from
- * "a number nobody would agree to", which in practice means a typo or a
- * confusion between €/MWh and €/kWh.
- *
- * Beyond ±60% is treated as implausible: a hedge struck a year early can
- * reasonably sit 30–40% away from today's average, but not twenty times away.
+ * certainty — so being above or below the average is not an error. Within
+ * the factor above, the difference is reported as information only. Outside
+ * it, the price is flagged as a likely typo or unit confusion.
  */
 export function compareToMarket(
   priceEurPerMwh: number,
   market: MarketSummary,
 ): PriceComparison {
-  if (priceEurPerMwh <= 0 || market.averageEurPerMwh <= 0) {
+  const average = market.averageEurPerMwh;
+  if (priceEurPerMwh <= 0 || average <= 0) {
     return { deltaPercent: 0, verdict: "unset" };
   }
 
-  const deltaPercent =
-    ((priceEurPerMwh - market.averageEurPerMwh) / market.averageEurPerMwh) * 100;
+  const deltaPercent = ((priceEurPerMwh - average) / average) * 100;
 
   let verdict: PriceVerdict;
-  if (deltaPercent < -60) verdict = "implausible-low";
+  if (priceEurPerMwh < average / IMPLAUSIBLE_FACTOR) verdict = "implausible-low";
+  else if (priceEurPerMwh > average * IMPLAUSIBLE_FACTOR)
+    verdict = "implausible-high";
   else if (deltaPercent < -15) verdict = "below-market";
   else if (deltaPercent <= 15) verdict = "plausible";
-  else if (deltaPercent <= 60) verdict = "above-market";
-  else verdict = "implausible-high";
+  else verdict = "above-market";
 
   return { deltaPercent, verdict };
 }

@@ -178,7 +178,7 @@ export function LineForm({ draft, onChange, market }: Props) {
                     }
                   >
                     <option value="kWh">kWh</option>
-                    <option value="MWh">MWh</option>
+                    <option value="kW">kW</option>
                   </select>
                 </div>
               </div>

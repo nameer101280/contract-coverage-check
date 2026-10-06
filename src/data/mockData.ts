@@ -12,7 +12,8 @@ import {
  * I registered a real grid connection (my flat in Leuven, Fluvius as DSO,
  * Zenne-Dijle, Laagspanningsnet - piekmeting) and connected my actual digital
  * meter, so the consumption figures below come from a real Fluvius feed:
- * 634.81 kWh over roughly two months.
+ * 369.73 kWh from 1 September to 6 October 2026, as the platform's Energy
+ * Cost report shows it.
  *
  * The two supplier contracts are the ones I created in the real wizard. The
  * overlap between them is the mistake I made without being told.
@@ -30,7 +31,7 @@ export const asset: Asset = {
 
 /**
  * 15-minute readings reconstructed to match the shape and total of the real
- * feed: 634.81 kWh across 61 days, baseline around 0.1 kW overnight, a morning
+ * feed: 369.73 kWh across 36 days, baseline around 0.1 kW overnight, a morning
  * bump, an evening peak near 1 kW, and occasional appliance bursts.
  *
  * Deterministic so the prototype looks the same on every load.
@@ -38,7 +39,7 @@ export const asset: Asset = {
 function buildReadings(): MeterReading[] {
   const out: MeterReading[] = [];
   const start = Date.parse("2026-09-01T00:00:00Z");
-  const intervals = 61 * 96; // 61 days of quarter hours
+  const intervals = 36 * 96; // 1 Sep to 6 Oct, in quarter hours
 
   // Small deterministic pseudo-random source, so no dependency and no drift.
   let seed = 20260901;
@@ -67,7 +68,7 @@ function buildReadings(): MeterReading[] {
 
   // Scale to the real metered total so the headline figure is the true one.
   const total = out.reduce((s, r) => s + r.consumptionKwh, 0);
-  const factor = 634.81 / total;
+  const factor = 369.73 / total;
   return out.map((r) => ({
     ...r,
     consumptionKwh: Number((r.consumptionKwh * factor).toFixed(4)),
@@ -77,10 +78,13 @@ function buildReadings(): MeterReading[] {
 export const meterReadings: MeterReading[] = buildReadings();
 
 /**
- * Hourly day-ahead prices with a plausible Belgian shape: a midday dip when
- * solar is abundant, an evening peak, and the occasional negative hour.
- * Averages near €72/MWh, which is in the right region for recent Belgian
- * day-ahead settlement.
+ * Hourly day-ahead prices for the same 36 days as the readings, with a
+ * Belgian shape: a midday dip when solar is abundant, an evening peak, the
+ * occasional scarcity spike and the occasional negative hour.
+ *
+ * The shape is generated, but the level is not. It is matched to the Market
+ * Data page for 1 September to 6 October 2026, which shows an average of
+ * €161.40/MWh, a low of −€1.95 and a daily spread of about €220.
  */
 function buildPrices(): MarketPrice[] {
   const out: MarketPrice[] = [];
@@ -91,17 +95,20 @@ function buildPrices(): MarketPrice[] {
     return seed / 0x7fffffff;
   };
 
-  for (let i = 0; i < 30 * 24; i++) {
+  for (let i = 0; i < 36 * 24; i++) {
     const at = start + i * 3_600_000;
     const hour = ((at / 3_600_000) % 24 + 24) % 24;
 
     // Midday solar dip, evening scarcity peak.
-    const dip = -38 * Math.exp(-((hour - 13) ** 2) / 8);
-    const peak = 62 * Math.exp(-((hour - 19) ** 2) / 6);
-    let price = 72 + dip + peak + (rand() - 0.5) * 24;
+    const dip = -60 * Math.exp(-((hour - 13) ** 2) / 8);
+    const peak = 105 * Math.exp(-((hour - 19) ** 2) / 6);
+    let price = 156 + dip + peak + (rand() - 0.5) * 40;
+
+    // A still evening with low reserves.
+    if (rand() < 0.004) price += 100 + rand() * 250;
 
     // Negative prices happen on windy, sunny, low-demand hours.
-    if (rand() < 0.015) price = -(5 + rand() * 25);
+    if (rand() < 0.015) price = -(0.5 + rand() * 1.5);
 
     out.push({
       at: new Date(at).toISOString(),

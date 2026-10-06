@@ -7,12 +7,19 @@ import {
 
 /**
  * Coverage analysis: given the lines that price an asset, find the places where
- * the same energy is priced more than once, and the places where it isn't
- * priced at all.
+ * more than one line claims the same energy, and the places where no line
+ * prices it at all.
  *
  * Companion's platform accepts both without comment. Its own primer says so:
  * "the platform will happily accept a contract whose lines double-count,
  * leave a period uncovered, or price a flow the asset doesn't have."
+ *
+ * On my account the overlap did not actually double the bill. The cost report
+ * showed a single "Day-ahead energy" row at €182.95/MWh against a market
+ * average of €161.40, which is one line plus a markup, not two. So the engine
+ * resolves the conflict by using one line, and nothing says which. The risk
+ * is not an inflated total but an unexplained one: the user cannot tell
+ * whether they are being costed at spot + €9 or spot + €12.
  */
 
 export interface Overlap {
@@ -133,9 +140,9 @@ export function findOverlaps(lines: ContractLine[]): Overlap[] {
 /**
  * Stretches within a window where no price-setting line applies to a direction.
  *
- * An uncovered period is arguably worse than a double-counted one: there is no
- * price at all, so the cost engine has nothing to compute and the resulting
- * total is quietly incomplete rather than quietly inflated.
+ * An uncovered period is arguably worse than a contested one: with a contest
+ * the engine still applies some price, but here there is none, so it has
+ * nothing to compute and the resulting total is quietly incomplete.
  */
 export function findGaps(
   lines: ContractLine[],

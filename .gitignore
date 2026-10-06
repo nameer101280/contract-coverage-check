@@ -2,3 +2,7 @@ node_modules
 dist
 *.local
 .DS_Store
+*.tsbuildinfo
+.playwright-mcp/
+CLAUDE_CODE_CONTEXT.md
+Companion_Case_Writeup*

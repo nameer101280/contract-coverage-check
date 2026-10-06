@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import { ContractLine } from "./domain/types";
-import { findGaps, findOverlaps } from "./domain/coverage";
+import { daysInPeriod, findGaps, findOverlaps } from "./domain/coverage";
 import {
   hedgeCoverage,
   summariseConsumption,
@@ -68,14 +68,24 @@ export default function App() {
 
   const draftLine = useMemo(() => draftToLine(draft), [draft]);
 
-  const hedgeKwh = toKwh(draft.hedgeVolume, draft.hedgeVolumeUnit);
+  const periodDays = daysInPeriod(draftLine.period);
+  const hedgeKwh = toKwh(
+    draft.hedgeVolume,
+    draft.hedgeVolumeUnit,
+    periodDays * 24,
+  );
 
   const coverage = useMemo(
     () =>
       draft.type === "hedge"
-        ? hedgeCoverage(hedgeKwh, consumption)
-        : { percentOfAnnual: 0, equivalentDays: 0, verdict: "none" as const },
-    [draft.type, hedgeKwh, consumption],
+        ? hedgeCoverage(hedgeKwh, consumption, periodDays)
+        : {
+            percentOfPeriod: 0,
+            expectedKwh: 0,
+            equivalentDays: 0,
+            verdict: "none" as const,
+          },
+    [draft.type, hedgeKwh, consumption, periodDays],
   );
 
   const priceComparison = useMemo(

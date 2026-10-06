@@ -15,14 +15,19 @@ export type LineType = "spot" | "hedge" | "markup";
 /**
  * A line is "price-setting" if it establishes the base price for a volume of
  * energy. Two price-setting lines on the same asset, direction and period are
- * a conflict: the same kWh gets priced twice.
+ * a conflict: the same kWh has two candidate prices, and only one of them can
+ * be what is actually paid.
  *
  * A markup is additive. It sits on top of whatever the base price is, so two
  * markups overlapping is normal and not worth flagging.
  */
 export const PRICE_SETTING_TYPES: readonly LineType[] = ["spot", "hedge"];
 
-export type VolumeUnit = "kWh" | "MWh";
+/**
+ * The two units Companion's hedge form offers. They are not two scales of the
+ * same thing: kWh is an amount of energy, kW is a rate of power.
+ */
+export type VolumeUnit = "kW" | "kWh";
 
 /** A closed date range. Both ends inclusive. */
 export interface Period {

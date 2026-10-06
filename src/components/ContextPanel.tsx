@@ -1,5 +1,10 @@
 import { Asset } from "../domain/types";
-import { ConsumptionSummary, HedgeCoverage, hoursAtPhysicalLimit } from "../domain/volume";
+import {
+  ConsumptionSummary,
+  HedgeCoverage,
+  exceedsPhysicalLimit,
+  hoursAtPhysicalLimit,
+} from "../domain/volume";
 import { MarketSummary, PriceComparison } from "../domain/market";
 import { LineDraft } from "./LineForm";
 
@@ -43,6 +48,15 @@ export function ContextPanel({
   coverage,
   priceComparison,
 }: Props) {
+  const overPhysicalLimit = exceedsPhysicalLimit(
+    draft.hedgeVolume,
+    draft.hedgeVolumeUnit,
+    asset.physicalLimitKw,
+  );
+  const priceImplausible =
+    priceComparison.verdict === "implausible-low" ||
+    priceComparison.verdict === "implausible-high";
+
   return (
     <section className="card context">
       <div>
@@ -118,10 +132,10 @@ export function ContextPanel({
                         : "headline--ok")
                   }
                 >
-                  {coverage.percentOfAnnual < 0.1
+                  {coverage.percentOfPeriod < 0.1
                     ? "<0.1"
-                    : fmt(coverage.percentOfAnnual, 1)}
-                  % of annual consumption
+                    : fmt(coverage.percentOfPeriod, 1)}
+                  % of consumption in this period
                 </div>
 
                 <div className="bar">
@@ -135,12 +149,21 @@ export function ContextPanel({
                           : "")
                     }
                     style={{
-                      width: `${Math.min(100, coverage.percentOfAnnual)}%`,
+                      width: `${Math.min(100, coverage.percentOfPeriod)}%`,
                     }}
                   />
                 </div>
 
                 <p className="note">
+                  {draft.hedgeVolumeUnit === "kW" && (
+                    <>
+                      {fmt(draft.hedgeVolume, 1)} kW held for every hour of
+                      this period is <strong>{fmt(hedgeKwh)} kWh</strong>.{" "}
+                    </>
+                  )}
+                  At the metered rate, this connection would use about{" "}
+                  <strong>{fmt(coverage.expectedKwh)} kWh</strong> while this
+                  line applies.{" "}
                   <strong>
                     {fmt(hedgeKwh)} kWh
                   </strong>{" "}
@@ -161,14 +184,33 @@ export function ContextPanel({
                       </p>
                       <p className="notice__body">
                         A hedge under 5% of consumption is more often a units
-                        mistake than a deliberate position. Check whether MWh
-                        was intended.
+                        mistake than a deliberate position. If the supplier
+                        contract states MWh, this form needs the amount in kWh.
                       </p>
                     </div>
                   </div>
                 )}
 
-                {coverage.verdict === "exceeds" && (
+                {overPhysicalLimit && (
+                  <div className="notice notice--danger">
+                    <span className="notice__icon">!</span>
+                    <div>
+                      <p className="notice__title">
+                        More power than this connection can draw
+                      </p>
+                      <p className="notice__body">
+                        A hedge in kW means that much power in every hour. This
+                        connection is physically limited to{" "}
+                        {fmt(asset.physicalLimitKw, 1)} kW, so{" "}
+                        {fmt(draft.hedgeVolume, 1)} kW can never be used in
+                        full. If this is an amount of energy, the unit should
+                        be kWh.
+                      </p>
+                    </div>
+                  </div>
+                )}
+
+                {coverage.verdict === "exceeds" && !overPhysicalLimit && (
                   <div className="notice notice--danger">
                     <span className="notice__icon">!</span>
                     <div>
@@ -226,21 +268,22 @@ export function ContextPanel({
                           priceComparison.deltaPercent < 0 ? "below" : "above"
                         }`}
                   </strong>{" "}
-                  that average. A hedge is meant to differ from spot, so a
-                  difference is not itself a problem.
+                  that average.
+                  {!priceImplausible &&
+                    " A hedge is priced when it is signed, not today, so a difference is normal if the market has moved since."}
                 </p>
 
-                {(priceComparison.verdict === "implausible-low" ||
-                  priceComparison.verdict === "implausible-high") && (
+                {priceImplausible && (
                   <div className="notice notice--danger">
                     <span className="notice__icon">!</span>
                     <div>
                       <p className="notice__title">
-                        This price is outside any plausible range
+                        This price is more than five times off the market
                       </p>
                       <p className="notice__body">
-                        No supplier would agree to this. The usual cause is a
-                        confusion between €/MWh and €/kWh, which differ by a
+                        The market does not move that far between signing a
+                        hedge and using it. The usual cause is a typo, or a
+                        price in €/kWh entered as €/MWh, which differ by a
                         factor of 1,000.
                       </p>
                     </div>
